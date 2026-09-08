@@ -89,6 +89,8 @@ rule cluster_sequences:
         clean_dir_arg = (f"--clean_dir {CLEAN_DIR}" if EC is not None else ""),
     conda:
         "envs/clean.yaml" if EC is not None else "envs/stage1.yaml"
+    threads:
+        workflow.cores
     shell:
         r"""
         export LD_LIBRARY_PATH="${{CONDA_PREFIX}}/lib:${{LD_LIBRARY_PATH:-}}"
@@ -105,5 +107,6 @@ rule cluster_sequences:
             {params.pfam_db_arg} \
             {params.ec_arg} \
             {params.clean_dir_arg} \
+            --threads        {threads} \
             2> {log}
         """

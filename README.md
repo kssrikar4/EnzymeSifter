@@ -135,3 +135,17 @@ Users can use -threads n at either stage to specify the number of CPU cores to u
   
 
 
+
+---
+
+## Performance Optimizations
+This version of EnzymeSifter has been heavily optimized for speed and throughput compared to the original repository:
+- **GPU Acceleration**: Neural network components including `CLEAN`, `pHoptNN`, `Seq2Topt`, and `NetSolP` have been updated to utilize CUDA-enabled PyTorch and ONNX Runtime if a compatible GPU is present. Mixed precision (`torch.autocast`) and batched feature extraction are used for maximum throughput.
+- **Batched Feature Extraction**: `Seq2Topt` now extracts ESM-2 embeddings once in memory and passes them through both Topt and Tm heads simultaneously, eliminating duplicate sequence processing.
+- **Hardware Concurrency**: Sub-processes (e.g. `mmseqs2`, `hmmsearch`, and `muscle`) are now automatically supplied with explicit thread directives matching your `--threads` arguments for full utilization of multicore CPUs.
+- **Fast Tree Building**: BioPython's pure-Python implementation of distance matrices and NJ-tree building has been replaced with `FastTree` for massive speedups on large alignments.
+
+---
+
+## Acknowledgements
+This repository is an optimized fork originally developed by the Bashton-Lab team. All credit for the pipeline concept, the overall architecture, and the foundational scripts goes to the original authors. Please visit the original [Bashton-Lab/EnzymeSifter](https://github.com/Bashton-Lab/EnzymeSifter) repository for the source project.

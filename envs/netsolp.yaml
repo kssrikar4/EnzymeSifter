@@ -7,8 +7,9 @@ dependencies:
   - pandas=2.3.3
   - biopython=1.87
   - numpy=2.2.6
-  - pytorch=2.10.0
-  - onnxruntime=1.26.0
   - pip
   - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.4.0
+      - onnxruntime-gpu
       - fair-esm==2.0.0

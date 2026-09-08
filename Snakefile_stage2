@@ -274,11 +274,13 @@ rule muscle_alignment:
         "data/alignments/muscle.afa",
     log:
         "logs/muscle/muscle_alignment.log",
+    threads:
+        workflow.cores
     conda:
         "envs/muscle.yaml"
     shell:
         r"""
-        muscle -align {input} -output {output} > {log} 2>&1
+        muscle -align {input} -output {output} -threads {threads} > {log} 2>&1
         """
 
 rule build_nj_tree:

@@ -18,7 +18,7 @@ dependencies:
   - hmmer>=3.3
   - mmseqs2
   - pip:
-      - --extra-index-url https://download.pytorch.org/whl/cpu
-      - torch==1.11.0
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.4.0
       - fair-esm==1.0.2
       - gdown

@@ -68,7 +68,7 @@ def filter_by_motif(input_fasta, output_fasta, motif_report, pattern, motif_str)
     return n_hit
 
 def filter_by_pfam(input_fasta, output_fasta, pfam_report, pfam_arg,
-                   pfam_db):
+                   pfam_db, threads):
     script = Path(__file__).parent / "run_pfam_filter.py"
     cmd = [
         sys.executable, str(script),
@@ -77,6 +77,7 @@ def filter_by_pfam(input_fasta, output_fasta, pfam_report, pfam_arg,
         "--report",  str(pfam_report),
         "--pfam",    pfam_arg,
         "--pfam_db", str(pfam_db),
+        "--cpu",     str(threads),
     ]
     print(f"[INFO] Running: {' '.join(cmd)}", file=sys.stderr)
     result = subprocess.run(cmd)
@@ -102,7 +103,7 @@ def filter_by_ec(input_fasta, output_fasta, ec_report, ec_arg, clean_dir):
     return count_sequences(output_fasta)
 
 
-def run_mmseqs2(input_fasta, output_prefix, identity_fraction, tmp_dir):
+def run_mmseqs2(input_fasta, output_prefix, identity_fraction, tmp_dir, threads):
     cmd = [
         "mmseqs", "easy-cluster",
         str(input_fasta),
@@ -112,6 +113,7 @@ def run_mmseqs2(input_fasta, output_prefix, identity_fraction, tmp_dir):
         "-c", "0.8",
         "--cov-mode", "0",
         "--cluster-mode", "2",
+        "--threads", str(threads),
     ]
     print(f"[INFO] Running: {' '.join(cmd)}", file=sys.stderr)
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -188,6 +190,8 @@ def main():
                         "(e.g. 3.13.1.8 or 3.13.-.-)")
     p.add_argument("--clean_dir", type=str, default=None,
                    help="Path to cloned CLEAN repo (required if --ec is given)")
+    p.add_argument("--threads", type=int, default=1,
+                   help="Number of threads to use")
     args = p.parse_args()
 
     if args.pfam is not None and args.pfam_db is None:
@@ -256,7 +260,7 @@ def main():
             cleanups.append(lambda p=pfam_filtered: p.unlink(missing_ok=True))
             n_after_pfam = filter_by_pfam(
                 working_fasta, pfam_filtered, pfam_report,
-                args.pfam, args.pfam_db,
+                args.pfam, args.pfam_db, args.threads
             )
             working_fasta = pfam_filtered
         else:
@@ -318,7 +322,7 @@ def main():
                 mmseqs_tmp = tmp_dir / "mmseqs_tmp"
                 mmseqs_tmp.mkdir()
                 run_mmseqs2(working_fasta, mmseqs_prefix,
-                            identity_fraction, mmseqs_tmp)
+                            identity_fraction, mmseqs_tmp, args.threads)
                 rep_fasta = Path(f"{mmseqs_prefix}_rep_seq.fasta")
                 cluster_tsv = Path(f"{mmseqs_prefix}_cluster.tsv")
                 if not rep_fasta.exists():

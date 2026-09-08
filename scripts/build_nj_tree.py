@@ -2,55 +2,49 @@
 
 import sys
 import argparse
+import subprocess
 from pathlib import Path
-
-from Bio import AlignIO
-from Bio.Phylo.TreeConstruction import DistanceCalculator, DistanceTreeConstructor
-from Bio.Phylo import write as write_tree
-
+from Bio import Phylo
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build a Neighbor-Joining tree from an aligned FASTA."
+        description="Build a phylogenetic tree from an aligned FASTA using FastTree."
     )
     parser.add_argument("alignment", help="Input aligned FASTA (.afa)")
     parser.add_argument("output", help="Output Newick tree (.nwk)")
     parser.add_argument(
         "--model",
         default="blosum62",
-        help="Distance model for DistanceCalculator (default: blosum62)",
+        help="Distance model for DistanceCalculator (ignored, FastTree uses JTT by default)",
     )
     args = parser.parse_args()
 
-    aln = AlignIO.read(args.alignment, "fasta")
-    print(f"[INFO] Loaded alignment: {len(aln)} sequences, {aln.get_alignment_length()} columns", file=sys.stderr)
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    
+    print(f"[INFO] Running FastTree on {args.alignment}", file=sys.stderr)
+    cmd = ["FastTree", "-out", args.output, args.alignment]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print(f"[ERROR] FastTree failed:\n{result.stderr}", file=sys.stderr)
+        sys.exit(1)
 
-    if len(aln) < 3:
-        print("[WARN] Fewer than 3 sequences.", file=sys.stderr)
-
-    calculator = DistanceCalculator(args.model)
-    dm = calculator.get_distance(aln)
-
-    constructor = DistanceTreeConstructor()
-    nj_tree = constructor.nj(dm)
-    n_neg = 0
-    for clade in nj_tree.find_clades():
+    tree = Phylo.read(args.output, "newick")
+    
+    for clade in tree.find_clades():
         if clade.branch_length is not None and clade.branch_length < 0:
             clade.branch_length = 0.0
-            n_neg += 1
-    if n_neg:
-        print(f"[INFO] Clamped {n_neg} negative branch length(s) to 0", file=sys.stderr)
-    nj_tree.root_at_midpoint()
 
-    nj_tree.ladderize()
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    for clade in nj_tree.get_terminals():
+    tree.root_at_midpoint()
+    tree.ladderize()
+
+    for clade in tree.get_terminals():
         if clade.name and "|" in clade.name:
             clade.name = clade.name.split("|")[0]
-    write_tree(nj_tree, args.output, "newick")
+            
+    Phylo.write(tree, args.output, "newick")
 
-    print(f"[INFO] NJ tree written to {args.output}", file=sys.stderr)
-
+    print(f"[INFO] Tree written to {args.output}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

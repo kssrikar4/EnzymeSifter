@@ -4,6 +4,7 @@ import argparse
 import math
 import sys
 import os
+import contextlib
 from pathlib import Path
 import pandas as pd
 import torch
@@ -13,8 +14,7 @@ from Bio import SeqIO
 warnings.filterwarnings("ignore",
     message="Setting attributes on ParameterList is not supported.")
 
-
-def load_model(seq2topt_dir, model_type="topt"):
+def load_model(seq2topt_dir, model_type="topt", device="cpu"):
     code_dir = os.path.join(seq2topt_dir, "code")
     if code_dir not in sys.path:
         sys.path.insert(0, code_dir)
@@ -26,7 +26,7 @@ def load_model(seq2topt_dir, model_type="topt"):
     n_head = 4
     n_RD = 4
 
-    model = MultiAttModel(dim, window, n_head, n_RD)
+    model = MultiAttModel(dim, window, n_head, n_RD).to(device)
 
     weights_dir = os.path.join(seq2topt_dir, "weights")
     if model_type == "topt":
@@ -41,70 +41,86 @@ def load_model(seq2topt_dir, model_type="topt"):
     if not os.path.isfile(weight_file):
         sys.exit(f"[ERROR] Weight file not found: {weight_file}")
 
-    state_dict = torch.load(weight_file, map_location="cpu", weights_only=False)
+    state_dict = torch.load(weight_file, map_location=device, weights_only=False)
     model.load_state_dict(state_dict)
     model.eval()
 
     return model, scale_factor
 
-
-def get_esm_model():
+def get_esm_model(device="cpu"):
     import esm
     model, alphabet = esm.pretrained.esm2_t6_8M_UR50D()
+    model = model.to(device)
     model.eval()
     batch_converter = alphabet.get_batch_converter()
     return model, batch_converter
 
-
-def predict_sequences(fasta_path, seq2topt_dir, model_type="topt"):
+def predict_sequences(fasta_path, seq2topt_dir, do_topt=False, do_tm=False):
     records = list(SeqIO.parse(fasta_path, "fasta"))
     if not records:
-        return pd.DataFrame(columns=["seq_id", "prediction"])
+        df_cols = ["seq_id"]
+        if do_topt: df_cols.append("predicted_topt_C")
+        if do_tm: df_cols.append("predicted_tm_C")
+        return pd.DataFrame(columns=df_cols)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[INFO] Using device: {device}", file=sys.stderr)
 
     print(f"[INFO] Loading ESM-2 model...", file=sys.stderr)
-    esm_model, batch_converter = get_esm_model()
+    esm_model, batch_converter = get_esm_model(device=device)
 
-    print(f"[INFO] Loading Seq2{model_type.capitalize()} model...", file=sys.stderr)
-    model, scale_factor = load_model(seq2topt_dir, model_type)
+    model_topt, scale_topt = None, None
+    model_tm, scale_tm = None, None
+
+    if do_topt:
+        print(f"[INFO] Loading Seq2Topt model...", file=sys.stderr)
+        model_topt, scale_topt = load_model(seq2topt_dir, "topt", device=device)
+    if do_tm:
+        print(f"[INFO] Loading Seq2Tm model...", file=sys.stderr)
+        model_tm, scale_tm = load_model(seq2topt_dir, "tm", device=device)
 
     seq_ids = [rec.id for rec in records]
     seq_strs = [str(rec.seq) for rec in records]
 
-    predictions = []
-    batch_size = 4
+    preds_topt = []
+    preds_tm = []
+    
+    batch_size = 64 if device.type == "cuda" else 4
 
     for i in range(math.ceil(len(seq_ids) / batch_size)):
         batch_ids = seq_ids[i * batch_size: (i + 1) * batch_size]
         batch_seqs = seq_strs[i * batch_size: (i + 1) * batch_size]
-
         inputs = [(batch_ids[j], batch_seqs[j]) for j in range(len(batch_ids))]
 
         try:
             _, _, batch_tokens = batch_converter(inputs)
+            batch_tokens = batch_tokens.to(device)
 
             with torch.no_grad():
-                results_esm = esm_model(
-                    batch_tokens, repr_layers=[6], return_contacts=False
-                )
-                emb = results_esm["representations"][6]
-                emb = emb.transpose(1, 2)
-
-                preds = model(emb)
-
-            pred_values = preds.cpu().detach().numpy().reshape(-1).tolist()
-            predictions.extend(pred_values)
+                autocast_ctx = torch.autocast(device_type=device.type, dtype=torch.float16) if device.type == "cuda" else contextlib.nullcontext()
+                with autocast_ctx:
+                    results_esm = esm_model(batch_tokens, repr_layers=[6], return_contacts=False)
+                    emb = results_esm["representations"][6].transpose(1, 2)
+                    
+                    if do_topt:
+                        ptopt = model_topt(emb).cpu().numpy().reshape(-1).tolist()
+                        preds_topt.extend(ptopt)
+                    if do_tm:
+                        ptm = model_tm(emb).cpu().numpy().reshape(-1).tolist()
+                        preds_tm.extend(ptm)
 
         except Exception as e:
             print(f"[WARN] Batch {i} failed: {e}", file=sys.stderr)
-            predictions.extend([float("nan")] * len(batch_ids))
+            if do_topt: preds_topt.extend([float("nan")] * len(batch_ids))
+            if do_tm: preds_tm.extend([float("nan")] * len(batch_ids))
 
-    scaled = [v * scale_factor for v in predictions]
+    out_dict = {"seq_id": seq_ids}
+    if do_topt:
+        out_dict["predicted_topt_C"] = [v * scale_topt for v in preds_topt]
+    if do_tm:
+        out_dict["predicted_tm_C"] = [v * scale_tm for v in preds_tm]
 
-    return pd.DataFrame({
-        "seq_id": seq_ids,
-        "prediction": scaled,
-    })
-
+    return pd.DataFrame(out_dict)
 
 def main():
     p = argparse.ArgumentParser(
@@ -129,26 +145,23 @@ def main():
     if not fasta.exists():
         sys.exit(f"[ERROR] FASTA file not found: {fasta}")
 
+    df = predict_sequences(
+        fasta, seq2topt_dir, 
+        do_topt=bool(args.output_topt), 
+        do_tm=bool(args.output_tm)
+    )
+
     if args.output_topt:
-        print("[INFO] Predicting Topt...", file=sys.stderr)
-        df_topt = predict_sequences(fasta, seq2topt_dir, model_type="topt")
-        df_topt.columns = ["seq_id", "predicted_topt_C"]
         out = Path(args.output_topt)
         out.parent.mkdir(parents=True, exist_ok=True)
-        df_topt.to_csv(out, sep="\t", index=False)
-        print(f"[INFO] Wrote {len(df_topt)} Topt predictions to {out}",
-              file=sys.stderr)
+        df[["seq_id", "predicted_topt_C"]].to_csv(out, sep="\t", index=False)
+        print(f"[INFO] Wrote {len(df)} Topt predictions to {out}", file=sys.stderr)
 
     if args.output_tm:
-        print("[INFO] Predicting Tm...", file=sys.stderr)
-        df_tm = predict_sequences(fasta, seq2topt_dir, model_type="tm")
-        df_tm.columns = ["seq_id", "predicted_tm_C"]
         out = Path(args.output_tm)
         out.parent.mkdir(parents=True, exist_ok=True)
-        df_tm.to_csv(out, sep="\t", index=False)
-        print(f"[INFO] Wrote {len(df_tm)} Tm predictions to {out}",
-              file=sys.stderr)
-
+        df[["seq_id", "predicted_tm_C"]].to_csv(out, sep="\t", index=False)
+        print(f"[INFO] Wrote {len(df)} Tm predictions to {out}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
