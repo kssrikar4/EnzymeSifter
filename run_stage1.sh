@@ -115,5 +115,5 @@ source "${SCRIPT_DIR}/scripts/ensure_snakemake.sh"
 
 conda run -n "${ENV_NAME}" --no-capture-output \
     snakemake --snakefile Snakefile_stage1 --config ${CONFIG} \
-        --use-conda --conda-frontend conda -j "${THREADS}" \
+        -j "${THREADS}" \
         --quiet rules progress

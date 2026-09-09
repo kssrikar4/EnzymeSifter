@@ -1,15 +1,26 @@
-name: phoptnn
+name: enzymesifter
 channels:
   - conda-forge
+  - bioconda
   - defaults
 dependencies:
-  - python=3.10.20
-  - rdkit=2026.03.2
-  - pandas=2.3.3
-  - numpy=2.2.6
-  - scipy=1.15.2
-  - scikit-learn=1.7.2
-  - biopython=1.87
+  - python=3.10
+  - biopython
+  - pandas
+  - scipy
+  - numpy<2
+  - scikit-learn
+  - matplotlib
+  - tqdm
+  - rdkit
+  - hmmer>=3.3
+  - mmseqs2
+  - fasttree
+  - muscle
+  - git
+  - unzip
+  - libstdcxx-ng
+  - snakemake-minimal
   - pip
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu121
@@ -21,3 +32,9 @@ dependencies:
       - torch_geometric==2.7.0
       - e3nn==0.6.0
       - pdb2pqr==3.6.2
+      - onnxruntime-gpu
+      - fair-esm==2.0.0
+      - transformers
+      - accelerate
+      - enzymm
+      - gdown

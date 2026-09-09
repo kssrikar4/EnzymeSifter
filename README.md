@@ -20,7 +20,7 @@ A two-stage Snakemake pipeline for sifting through protein sequences and identif
 The pipeline runs in two stages with a structure-prediction step (carried out externally by the user). Users are free to choose any of the optional filters:
 
 1. **Stage 1 - filtering of sequences.** Filter by catalytic-residue motif, one or more Pfam families, and/or CLEAN-predicted EC number(s), then cluster at a user-defined identity threshold using MMseqs2.
-2. **(User step) Structure prediction.** Generate PDB structures for Stage 1 filtered sequences.
+2. **Structure prediction (ESMFold).** Generate PDB structures for Stage 1 filtered sequences.
 3. **Stage 2 - structural screening.** Confirm enzymatic activity with EnzyMM, predict solubility/usability (NetSolP), optimal pH (pHoptNN), and optimal/melting temperatures (Seq2Topt), build an NJ tree, optionally partition it into clades, and select the best-scoring representative per clade according to your filtering criteria.
 
 ---
@@ -42,8 +42,8 @@ The pipeline runs in two stages with a structure-prediction step (carried out ex
                           └───────────────┬────────────────┘
                                           │
                   ╔═══════════════════════▼═══════════════════════╗
-                  ║              predict 3D structures            ║
-                  ║                done by the user               ║
+                  ║              predict 3D structures (ESMFold)            ║
+                  ║                run_pdb_prediction.sh               ║
                   ╚═══════════════════════╤═══════════════════════╝
                                           │
                           ┌───────────────▼────────────────┐
@@ -87,10 +87,10 @@ cd EnzymeSifter
 Make the run scripts executable:
 
 ```bash
-chmod +x run_stage1.sh run_stage2.sh
+chmod +x run_stage1.sh run_stage2.sh run_pdb_prediction.sh
 ```
 
-On the first invocation of either stage, all of the required tool-specific conda environments will be under `.snakemake/conda/`, and the relevant setup scripts (`scripts/setup_*.sh`) will fetch external databases and model weights into `external/`.
+On the first invocation of either stage, a single unified conda environment (`enzymesifter`) will be created automatically, and the relevant setup scripts (`scripts/setup_*.sh`) will fetch external databases and model weights into `external/`.
 
 ---
 
@@ -109,7 +109,12 @@ On the first invocation of either stage, all of the required tool-specific conda
 
 ### Between the stages - structure prediction
 
-Stage 2 needs a directory of PDB files of the filtered sequences.
+Stage 2 needs a directory of PDB files of the filtered sequences. You can generate these locally using the provided ESMFold script:
+
+```bash
+./run_pdb_prediction.sh data/stage1/nonredundant.fasta data/predicted_pdbs
+```
+*Note: This script automatically scales across hardware. It uses chunking and FP16 to run efficiently on low-VRAM GPUs (>=4GB), and will seamlessly fall back to CPU memory mapping if needed.*
 
 ### Stage 2
 

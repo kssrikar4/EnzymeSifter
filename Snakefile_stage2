@@ -96,8 +96,6 @@ rule run_enzymm:
         tsv="data/enzymm/{pdb}.tsv",
     log:
         "logs/enzymm/{pdb}.log",
-    conda:
-        "envs/enzymm.yaml"
     shell:
         r"""
         enzymm \
@@ -145,8 +143,6 @@ rule extract_sequences:
         fasta="data/sequences/{pdb}.fasta",
     log:
         "logs/extract_sequences/{pdb}.log",
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         python scripts/extract_sequences.py {input.pdb} {output.fasta} 2> {log}
@@ -162,8 +158,6 @@ rule merge_sequences:
         merged="data/sequences/all_hits.fasta",
     log:
         "logs/merge_sequences.log",
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         cat {input.fastas} > {output.merged} 2> {log}
@@ -199,8 +193,6 @@ rule phoptnn:
     params:
         phoptnn_dir=PHOPTNN_DIR,
         pdb_dir=PDB_DIR,
-    conda:
-        "envs/phoptnn.yaml"
     shell:
         r"""
         python scripts/run_phoptnn.py \
@@ -232,8 +224,6 @@ rule seq2topt:
         "logs/seq2topt/seq2topt.log",
     params:
         seq2topt_dir=SEQ2TOPT_DIR,
-    conda:
-        "envs/seq2topt.yaml"
     shell:
         r"""
         python scripts/run_seq2topt.py \
@@ -255,8 +245,6 @@ rule netsolp:
     params:
         netsolp_dir=NETSOLP_PS,
         model_type=config.get("netsolp_model", "Distilled"),
-    conda:
-        "envs/netsolp.yaml"
     shell:
         r"""
         python scripts/run_netsolp.py \
@@ -276,8 +264,6 @@ rule muscle_alignment:
         "logs/muscle/muscle_alignment.log",
     threads:
         workflow.cores
-    conda:
-        "envs/muscle.yaml"
     shell:
         r"""
         muscle -align {input} -output {output} -threads {threads} > {log} 2>&1
@@ -290,8 +276,6 @@ rule build_nj_tree:
         "data/trees/nj_tree.nwk",
     log:
         "logs/build_nj_tree.log",
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         python scripts/build_nj_tree.py {input} {output} 2> {log}
@@ -307,8 +291,6 @@ rule assign_clades:
         k=CLADES_K,
     log:
         "logs/clades/assign_clades.log",
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         python scripts/assign_clades.py \
@@ -339,8 +321,6 @@ rule tree_clades_png:
         rep_arg=lambda wildcards, input: (
             f"--representatives {input.representatives}" if DO_FILTER else ""
         ),
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         python scripts/render_tree_png.py \
@@ -365,8 +345,6 @@ rule select_representatives:
         spec_args=" ".join(
             f"--{flag} {val}" for flag, val in FILTER_SPECS.items()
         ),
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         filtered=$(ls predictions_output/*_filtered.tsv 2>/dev/null || true)
@@ -393,8 +371,6 @@ rule tree_png:
         "data/trees/nj_tree.png",
     log:
         "logs/tree_png.log",
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         python scripts/render_tree_png.py {input} {output} --dpi 300 2> {log}
@@ -411,8 +387,6 @@ rule merge_predictions:
          sentinel="predictions_output/.done",
      log:
          "logs/merge_predictions.log",
-     conda:
-         "envs/extract_sequences.yaml"
      shell:
          r"""
          python scripts/merge_predictions.py \
@@ -436,8 +410,6 @@ rule filter_predictions:
         spec_args=" ".join(
             f"--{flag} {val}" for flag, val in FILTER_SPECS.items()
         ),
-    conda:
-        "envs/extract_sequences.yaml"
     shell:
         r"""
         python scripts/filter_predictions.py \
