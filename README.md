@@ -42,8 +42,8 @@ The pipeline runs in two stages with a structure-prediction step (carried out ex
                           └───────────────┬────────────────┘
                                           │
                   ╔═══════════════════════▼═══════════════════════╗
-                  ║              predict 3D structures (ESMFold)            ║
-                  ║                run_pdb_prediction.sh               ║
+                  ║              predict 3D structures (ESMFold)  ║
+                  ║                run_pdb_prediction.sh          ║
                   ╚═══════════════════════╤═══════════════════════╝
                                           │
                           ┌───────────────▼────────────────┐
@@ -104,7 +104,7 @@ On the first invocation of either stage, a single unified conda environment (`en
 ```
 #### Example
 ```bash
-./run_stage1.sh ~/soil_proteins_renamed.fasta -residues GDSGGP -pfam PF00089 -identity 90
+./run_stage1.sh ~/protein.fasta -residues GDSGGP -pfam PF00089 -identity 90
 ```
 
 ### Between the stages - structure prediction
@@ -123,7 +123,7 @@ Stage 2 needs a directory of PDB files of the filtered sequences. You can genera
 ```
 #### Example
 ```bash
-./run_stage2.sh ~/trypsin_pdbs/ -solubility 0.69 -phopt 7:10 -topt 30:45 -tm 55 -clades 13
+./run_stage2.sh data/predicted_pdbs/ -solubility 0.69 -phopt 7:10 -topt 30:45 -tm 55 -clades 13
 ```
 
 Users can use -threads n at either stage to specify the number of CPU cores to use. If not used, the tool default to all available cores ($(nproc)).
