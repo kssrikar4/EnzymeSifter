@@ -11,4 +11,7 @@ fi
 if ! conda env list | grep -qE "^[[:space:]]*${ENV_NAME}[[:space:]]"; then
     echo "[setup] First run: creating the unified '${ENV_NAME}' environment..." >&2
     conda env create -f "${SCRIPT_DIR}/envs/enzymesifter.yaml"
+else
+    echo "[setup] Verifying unified '${ENV_NAME}' environment packages..." >&2
+    conda env update -n "${ENV_NAME}" -f "${SCRIPT_DIR}/envs/enzymesifter.yaml"
 fi
