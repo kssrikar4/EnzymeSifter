@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-configfile: "config/config.yaml"
+configfile: os.path.join(workflow.basedir, "config/config.yaml")
 
 INPUT_FASTA = config.get("input_fasta", None)
 if INPUT_FASTA is None:
@@ -18,43 +18,53 @@ IDENTITY = config.get("identity", None)
 RESIDUES = config.get("residues", None)
 PFAM     = config.get("pfam",     None)
 EC       = config.get("ec",       None)
+BASE_DIR = workflow.basedir
+OUT_DIR  = config.get("out_dir", "data/stage1")
+LOG_DIR  = config.get("log_dir", "logs/stage1")
+SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 
-PFAM_DIR = "external/pfam"
+PFAM_DIR = os.path.join(BASE_DIR, "external/pfam")
 PFAM_DB  = os.path.join(PFAM_DIR, "Pfam-A.hmm")
 
-CLEAN_DIR = "external/CLEAN"
+CLEAN_DIR = os.path.join(BASE_DIR, "external/CLEAN")
 
-for d in ["data/stage1", "logs/stage1"]:
+for d in [OUT_DIR, LOG_DIR]:
     Path(d).mkdir(parents=True, exist_ok=True)
 
 
 rule all:
     input:
-        "data/stage1/nonredundant.fasta",
-        "data/stage1/clustering_report.tsv",
-        "data/stage1/motif_report.tsv",
-        "data/stage1/pfam_report.tsv",
-        "data/stage1/ec_report.tsv",
+        os.path.join(OUT_DIR, "nonredundant.fasta"),
+        os.path.join(OUT_DIR, "clustering_report.tsv"),
+        os.path.join(OUT_DIR, "motif_report.tsv"),
+        os.path.join(OUT_DIR, "pfam_report.tsv"),
+        os.path.join(OUT_DIR, "ec_report.tsv"),
 
 rule setup_pfam:
     output:
         sentinel=os.path.join(PFAM_DIR, ".setup_done"),
     log:
-        "logs/stage1/setup_pfam.log",
+        os.path.join(LOG_DIR, "setup_pfam.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "setup_pfam.sh"),
+        pfam_dir=PFAM_DIR,
     shell:
         r"""
-        bash scripts/setup_pfam.sh {PFAM_DIR} > {log} 2>&1
+        bash {params.script} {params.pfam_dir} > {log} 2>&1
         """
 
 rule setup_clean:
     output:
         sentinel=os.path.join(CLEAN_DIR, ".setup_done"),
     log:
-        "logs/stage1/setup_clean.log",
+        os.path.join(LOG_DIR, "setup_clean.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "setup_clean.sh"),
+        clean_dir=CLEAN_DIR,
     shell:
         r"""
         export LD_LIBRARY_PATH="${{CONDA_PREFIX}}/lib:${{LD_LIBRARY_PATH:-}}"
-        bash scripts/setup_clean.sh {CLEAN_DIR} > {log} 2>&1
+        bash {params.script} {params.clean_dir} > {log} 2>&1
         """
 
 def cluster_inputs(wildcards):
@@ -69,18 +79,19 @@ rule cluster_sequences:
     input:
         unpack(cluster_inputs),
     output:
-        nonredundant   = "data/stage1/nonredundant.fasta",
-        cluster_report = "data/stage1/clustering_report.tsv",
-        motif_report   = "data/stage1/motif_report.tsv",
-        pfam_report    = "data/stage1/pfam_report.tsv",
-        ec_report      = "data/stage1/ec_report.tsv",
+        nonredundant   = os.path.join(OUT_DIR, "nonredundant.fasta"),
+        cluster_report = os.path.join(OUT_DIR, "clustering_report.tsv"),
+        motif_report   = os.path.join(OUT_DIR, "motif_report.tsv"),
+        pfam_report    = os.path.join(OUT_DIR, "pfam_report.tsv"),
+        ec_report      = os.path.join(OUT_DIR, "ec_report.tsv"),
     log:
-        "logs/stage1/cluster_sequences.log",
+        os.path.join(LOG_DIR, "cluster_sequences.log"),
     params:
-        identity_arg = (f"--identity {IDENTITY}" if IDENTITY is not None else ""),
-        residues_arg = (f"--residues {RESIDUES!r}" if RESIDUES is not None else ""),
-        pfam_arg     = (f"--pfam {PFAM}" if PFAM is not None else ""),
-        pfam_db_arg  = (f"--pfam_db {PFAM_DB}" if PFAM is not None else ""),
+        script        = os.path.join(SCRIPTS_DIR, "cluster_sequences.py"),
+        identity_arg  = (f"--identity {IDENTITY}" if IDENTITY is not None else ""),
+        residues_arg  = (f"--residues {RESIDUES!r}" if RESIDUES is not None else ""),
+        pfam_arg      = (f"--pfam {PFAM}" if PFAM is not None else ""),
+        pfam_db_arg   = (f"--pfam_db {PFAM_DB}" if PFAM is not None else ""),
         ec_arg        = (f"--ec {EC}" if EC is not None else ""),
         clean_dir_arg = (f"--clean_dir {CLEAN_DIR}" if EC is not None else ""),
     threads:
@@ -88,7 +99,7 @@ rule cluster_sequences:
     shell:
         r"""
         export LD_LIBRARY_PATH="${{CONDA_PREFIX}}/lib:${{LD_LIBRARY_PATH:-}}"
-        python scripts/cluster_sequences.py \
+        python {params.script} \
             --input          {input.fasta} \
             --nonredundant   {output.nonredundant} \
             --cluster_report {output.cluster_report} \

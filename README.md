@@ -136,6 +136,30 @@ Stage 2 needs a directory of PDB files of the filtered sequences. You can genera
 Users can use -threads n at either stage to specify the number of CPU cores to use. If not used, the tool default to all available cores ($(nproc)).
   See [tutorial](tutorial.md) for complete features of the pipeline.
 
+### Multi-sample batch analysis (`-l <list_file>`)
+
+To process multiple FASTA files in batch, create a text file containing the paths of all FASTA files (one per line, e.g. `data.lst`):
+
+```
+/path/to/sample1.fasta
+/path/to/sample2.fasta
+```
+
+Then run the pipeline stages using the `-l` flag:
+
+```bash
+# 1. Stage 1: filter and cluster each FASTA into its own sample directory:
+./run_stage1.sh -l data.lst -residues GDSGGP -pfam PF00089 -identity 90
+
+# 2. Structure prediction: predicts PDB structures for each sample:
+./run_pdb_prediction.sh -l data.lst
+
+# 3. Stage 2: run screening, property predictions, tree building, and clade analysis for each sample:
+./run_stage2.sh -l data.lst -solubility 0.69 -phopt 7:10 -topt 30:45 -tm 55 -clades 13
+```
+
+For each FASTA file, a folder named after the file (e.g. `sample1/`, `sample2/`) is created containing its complete, isolated outputs (`data/stage1/`, `data/predicted_pdbs/`, `predictions_output/`, and `logs/`).
+
 ---
 
 ## License

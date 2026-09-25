@@ -2,7 +2,10 @@ import os
 import glob
 from pathlib import Path
 
-configfile: "config/config.yaml"
+configfile: os.path.join(workflow.basedir, "config/config.yaml")
+
+BASE_DIR = workflow.basedir
+SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
 
 # User must provide the directory containing PDB files
 PDB_DIR = config.get("pdb_dir", None)
@@ -24,26 +27,32 @@ PDBS = [
 if len(PDBS) == 0:
     raise ValueError(f"ERROR: No .pdb files found in directory: {PDB_DIR}")
 
+OUT_DIR = config.get("out_dir", "")
+DATA_DIR = os.path.join(OUT_DIR, "data") if OUT_DIR else "data"
+LOG_DIR  = os.path.join(OUT_DIR, "logs") if OUT_DIR else "logs"
+PRED_DIR = os.path.join(OUT_DIR, "predictions_output") if OUT_DIR else "predictions_output"
+
 for d in [
-    "data/enzymm",
-    "data/sequences",
-    "logs/enzymm",
-    "logs/extract_sequences",
-    "data/alignments",
-    "logs/muscle",
-    "data/predictions",
-    "logs/netsolp",
-    "logs/phoptnn",
-    "logs/seq2topt",
-    "data/clades",
-    "logs/clades",
+    os.path.join(DATA_DIR, "enzymm"),
+    os.path.join(DATA_DIR, "sequences"),
+    os.path.join(LOG_DIR, "enzymm"),
+    os.path.join(LOG_DIR, "extract_sequences"),
+    os.path.join(DATA_DIR, "alignments"),
+    os.path.join(LOG_DIR, "muscle"),
+    os.path.join(DATA_DIR, "predictions"),
+    os.path.join(LOG_DIR, "netsolp"),
+    os.path.join(LOG_DIR, "phoptnn"),
+    os.path.join(LOG_DIR, "seq2topt"),
+    os.path.join(DATA_DIR, "clades"),
+    os.path.join(LOG_DIR, "clades"),
+    PRED_DIR,
 ]:
     Path(d).mkdir(parents=True, exist_ok=True)
 
-NETSOLP_DIR = "external/NetSolP-1.0"
+NETSOLP_DIR = os.path.join(BASE_DIR, "external/NetSolP-1.0")
 NETSOLP_PS  = os.path.join(NETSOLP_DIR, "PredictionServer")
-PHOPTNN_DIR = "external/pHoptNN"
-SEQ2TOPT_DIR = "external/Seq2Topt"
+PHOPTNN_DIR = os.path.join(BASE_DIR, "external/pHoptNN")
+SEQ2TOPT_DIR = os.path.join(BASE_DIR, "external/Seq2Topt")
 
 
 
@@ -76,26 +85,26 @@ def get_hit_pdbs(wildcards=None):
 
 rule all:
     input:
-        "data/alignments/muscle.afa",
-        "data/trees/nj_tree.nwk",
-        "data/trees/nj_tree.png" if not DO_FILTER else [],
-        "data/predictions/netsolp.tsv",
-        "data/predictions/phoptnn.tsv",
-        "data/predictions/seq2topt_topt.tsv",
-        "data/predictions/seq2topt_tm.tsv",
-        "predictions_output/.done",
-        "data/clades/clade_assignments.tsv" if DO_CLADES else [],
-        "data/trees/nj_tree_clades.png"     if DO_CLADES else [],
-        "predictions_output/.filter_done" if DO_FILTER else [],
-        "predictions_output/clade_representatives.tsv"
-            if (DO_CLADES and DO_FILTER) else [],
+        os.path.join(DATA_DIR, "alignments/muscle.afa"),
+        os.path.join(DATA_DIR, "trees/nj_tree.nwk"),
+        (os.path.join(DATA_DIR, "trees/nj_tree.png") if not DO_FILTER else []),
+        os.path.join(DATA_DIR, "predictions/netsolp.tsv"),
+        os.path.join(DATA_DIR, "predictions/phoptnn.tsv"),
+        os.path.join(DATA_DIR, "predictions/seq2topt_topt.tsv"),
+        os.path.join(DATA_DIR, "predictions/seq2topt_tm.tsv"),
+        os.path.join(PRED_DIR, ".done"),
+        (os.path.join(DATA_DIR, "clades/clade_assignments.tsv") if DO_CLADES else []),
+        (os.path.join(DATA_DIR, "trees/nj_tree_clades.png")     if DO_CLADES else []),
+        (os.path.join(PRED_DIR, ".filter_done") if DO_FILTER else []),
+        (os.path.join(PRED_DIR, "clade_representatives.tsv")
+            if (DO_CLADES and DO_FILTER) else []),
 rule run_enzymm:
     input:
         pdb=lambda wc: os.path.join(PDB_DIR, f"{wc.pdb}.pdb"),
     output:
-        tsv="data/enzymm/{pdb}.tsv",
+        tsv=os.path.join(DATA_DIR, "enzymm/{pdb}.tsv"),
     log:
-        "logs/enzymm/{pdb}.log",
+        os.path.join(LOG_DIR, "enzymm/{pdb}.log"),
     shell:
         r"""
         enzymm \
@@ -108,9 +117,9 @@ rule run_enzymm:
 # Collect which PDBs had at least 1 EnzyMM hit
 checkpoint collect_enzymm_hits:
     input:
-        expand("data/enzymm/{pdb}.tsv", pdb=PDBS),
+        expand(os.path.join(DATA_DIR, "enzymm/{pdb}.tsv"), pdb=PDBS),
     output:
-        hitlist="data/enzymm/hit_pdbs.txt",
+        hitlist=os.path.join(DATA_DIR, "enzymm/hit_pdbs.txt"),
     run:
         hits = []
         for tsv_path in input:
@@ -140,24 +149,26 @@ rule extract_sequences:
     input:
         pdb=lambda wc: os.path.join(PDB_DIR, f"{wc.pdb}.pdb"),
     output:
-        fasta="data/sequences/{pdb}.fasta",
+        fasta=os.path.join(DATA_DIR, "sequences/{pdb}.fasta"),
     log:
-        "logs/extract_sequences/{pdb}.log",
+        os.path.join(LOG_DIR, "extract_sequences/{pdb}.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "extract_sequences.py"),
     shell:
         r"""
-        python scripts/extract_sequences.py {input.pdb} {output.fasta} 2> {log}
+        python {params.script} {input.pdb} {output.fasta} 2> {log}
         """
 
 rule merge_sequences:
     input:
         fastas=lambda wc: expand(
-            "data/sequences/{pdb}.fasta",
+            os.path.join(DATA_DIR, "sequences/{pdb}.fasta"),
             pdb=get_hit_pdbs(wc),
         ),
     output:
-        merged="data/sequences/all_hits.fasta",
+        merged=os.path.join(DATA_DIR, "sequences/all_hits.fasta"),
     log:
-        "logs/merge_sequences.log",
+        os.path.join(LOG_DIR, "merge_sequences.log"),
     shell:
         r"""
         cat {input.fastas} > {output.merged} 2> {log}
@@ -167,35 +178,42 @@ rule setup_netsolp:
     output:
         sentinel=os.path.join(NETSOLP_PS, ".setup_done"),
     log:
-        "logs/netsolp/setup_netsolp.log",
+        os.path.join(LOG_DIR, "netsolp/setup_netsolp.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "setup_netsolp.sh"),
+        netsolp_dir=NETSOLP_DIR,
     shell:
         r"""
-        bash scripts/setup_netsolp.sh {NETSOLP_DIR} > {log} 2>&1
+        bash {params.script} {params.netsolp_dir} > {log} 2>&1
         """
 rule setup_phoptnn:
     output:
         sentinel=os.path.join(PHOPTNN_DIR, ".setup_done"),
     log:
-        "logs/phoptnn/setup_phoptnn.log",
+        os.path.join(LOG_DIR, "phoptnn/setup_phoptnn.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "setup_phoptnn.sh"),
+        phoptnn_dir=PHOPTNN_DIR,
     shell:
         r"""
-        bash scripts/setup_phoptnn.sh {PHOPTNN_DIR} > {log} 2>&1
+        bash {params.script} {params.phoptnn_dir} > {log} 2>&1
         """
 
 rule phoptnn:
     input:
-        hitlist="data/enzymm/hit_pdbs.txt",
+        hitlist=os.path.join(DATA_DIR, "enzymm/hit_pdbs.txt"),
         setup=os.path.join(PHOPTNN_DIR, ".setup_done"),
     output:
-        tsv="data/predictions/phoptnn.tsv",
+        tsv=os.path.join(DATA_DIR, "predictions/phoptnn.tsv"),
     log:
-        "logs/phoptnn/phoptnn.log",
+        os.path.join(LOG_DIR, "phoptnn/phoptnn.log"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "run_phoptnn.py"),
         phoptnn_dir=PHOPTNN_DIR,
         pdb_dir=PDB_DIR,
     shell:
         r"""
-        python scripts/run_phoptnn.py \
+        python {params.script} \
             --pdb_dir {params.pdb_dir} \
             --hit_list {input.hitlist} \
             --phoptnn_dir {params.phoptnn_dir} \
@@ -207,26 +225,30 @@ rule setup_seq2topt:
     output:
         sentinel=os.path.join(SEQ2TOPT_DIR, ".setup_done"),
     log:
-        "logs/seq2topt/setup_seq2topt.log",
+        os.path.join(LOG_DIR, "seq2topt/setup_seq2topt.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "setup_seq2topt.sh"),
+        seq2topt_dir=SEQ2TOPT_DIR,
     shell:
         r"""
-        bash scripts/setup_seq2topt.sh {SEQ2TOPT_DIR} > {log} 2>&1
+        bash {params.script} {params.seq2topt_dir} > {log} 2>&1
         """
 
 rule seq2topt:
     input:
-        fasta="data/sequences/all_hits.fasta",
+        fasta=os.path.join(DATA_DIR, "sequences/all_hits.fasta"),
         setup=os.path.join(SEQ2TOPT_DIR, ".setup_done"),
     output:
-        topt="data/predictions/seq2topt_topt.tsv",
-        tm="data/predictions/seq2topt_tm.tsv",
+        topt=os.path.join(DATA_DIR, "predictions/seq2topt_topt.tsv"),
+        tm=os.path.join(DATA_DIR, "predictions/seq2topt_tm.tsv"),
     log:
-        "logs/seq2topt/seq2topt.log",
+        os.path.join(LOG_DIR, "seq2topt/seq2topt.log"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "run_seq2topt.py"),
         seq2topt_dir=SEQ2TOPT_DIR,
     shell:
         r"""
-        python scripts/run_seq2topt.py \
+        python {params.script} \
             --fasta {input.fasta} \
             --seq2topt_dir {params.seq2topt_dir} \
             --output_topt {output.topt} \
@@ -236,18 +258,19 @@ rule seq2topt:
 
 rule netsolp:
     input:
-        fasta="data/sequences/all_hits.fasta",
+        fasta=os.path.join(DATA_DIR, "sequences/all_hits.fasta"),
         setup=os.path.join(NETSOLP_PS, ".setup_done"),
     output:
-        tsv="data/predictions/netsolp.tsv",
+        tsv=os.path.join(DATA_DIR, "predictions/netsolp.tsv"),
     log:
-        "logs/netsolp/netsolp.log",
+        os.path.join(LOG_DIR, "netsolp/netsolp.log"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "run_netsolp.py"),
         netsolp_dir=NETSOLP_PS,
         model_type=config.get("netsolp_model", "Distilled"),
     shell:
         r"""
-        python scripts/run_netsolp.py \
+        python {params.script} \
             --fasta {input.fasta} \
             --output {output.tsv} \
             --netsolp_dir {params.netsolp_dir} \
@@ -257,11 +280,11 @@ rule netsolp:
 
 rule muscle_alignment:
     input:
-        "data/sequences/all_hits.fasta",
+        os.path.join(DATA_DIR, "sequences/all_hits.fasta"),
     output:
-        "data/alignments/muscle.afa",
+        os.path.join(DATA_DIR, "alignments/muscle.afa"),
     log:
-        "logs/muscle/muscle_alignment.log",
+        os.path.join(LOG_DIR, "muscle/muscle_alignment.log"),
     threads:
         workflow.cores
     shell:
@@ -271,29 +294,32 @@ rule muscle_alignment:
 
 rule build_nj_tree:
     input:
-        "data/alignments/muscle.afa",
+        os.path.join(DATA_DIR, "alignments/muscle.afa"),
     output:
-        "data/trees/nj_tree.nwk",
+        os.path.join(DATA_DIR, "trees/nj_tree.nwk"),
     log:
-        "logs/build_nj_tree.log",
+        os.path.join(LOG_DIR, "build_nj_tree.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "build_nj_tree.py"),
     shell:
         r"""
-        python scripts/build_nj_tree.py {input} {output} 2> {log}
+        python {params.script} {input} {output} 2> {log}
         """
 
 
 rule assign_clades:
     input:
-        tree="data/trees/nj_tree.nwk",
+        tree=os.path.join(DATA_DIR, "trees/nj_tree.nwk"),
     output:
-        tsv="data/clades/clade_assignments.tsv",
+        tsv=os.path.join(DATA_DIR, "clades/clade_assignments.tsv"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "assign_clades.py"),
         k=CLADES_K,
     log:
-        "logs/clades/assign_clades.log",
+        os.path.join(LOG_DIR, "clades/assign_clades.log"),
     shell:
         r"""
-        python scripts/assign_clades.py \
+        python {params.script} \
             {input.tree} {output.tsv} \
             --clades {params.k} \
             2> {log}
@@ -302,28 +328,29 @@ rule assign_clades:
 
 def tree_clades_png_inputs(wildcards):
     inputs = {
-        "tree":     "data/trees/nj_tree.nwk",
-        "clades":   "data/clades/clade_assignments.tsv",
-        "hit_list": "data/enzymm/hit_pdbs.txt",
+        "tree":     os.path.join(DATA_DIR, "trees/nj_tree.nwk"),
+        "clades":   os.path.join(DATA_DIR, "clades/clade_assignments.tsv"),
+        "hit_list": os.path.join(DATA_DIR, "enzymm/hit_pdbs.txt"),
     }
     if DO_FILTER:
-        inputs["representatives"] = "predictions_output/clade_representatives.tsv"
+        inputs["representatives"] = os.path.join(PRED_DIR, "clade_representatives.tsv")
     return inputs
 
 rule tree_clades_png:
     input:
         unpack(tree_clades_png_inputs),
     output:
-        png="data/trees/nj_tree_clades.png",
+        png=os.path.join(DATA_DIR, "trees/nj_tree_clades.png"),
     log:
-        "logs/tree_clades_png.log",
+        os.path.join(LOG_DIR, "tree_clades_png.log"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "render_tree_png.py"),
         rep_arg=lambda wildcards, input: (
             f"--representatives {input.representatives}" if DO_FILTER else ""
         ),
     shell:
         r"""
-        python scripts/render_tree_png.py \
+        python {params.script} \
             {input.tree} {output.png} \
             --dpi 300 \
             --clades {input.clades} \
@@ -334,27 +361,29 @@ rule tree_clades_png:
 
 rule select_representatives:
     input:
-        clades="data/clades/clade_assignments.tsv",
-        filter_done="predictions_output/.filter_done",
-        hit_list="data/enzymm/hit_pdbs.txt",
+        clades=os.path.join(DATA_DIR, "clades/clade_assignments.tsv"),
+        filter_done=os.path.join(PRED_DIR, ".filter_done"),
+        hit_list=os.path.join(DATA_DIR, "enzymm/hit_pdbs.txt"),
     output:
-        tsv="predictions_output/clade_representatives.tsv",
+        tsv=os.path.join(PRED_DIR, "clade_representatives.tsv"),
     log:
-        "logs/clades/select_representatives.log",
+        os.path.join(LOG_DIR, "clades/select_representatives.log"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "select_representatives.py"),
+        pred_dir=PRED_DIR,
         spec_args=" ".join(
             f"--{flag} {val}" for flag, val in FILTER_SPECS.items()
         ),
     shell:
         r"""
-        filtered=$(ls predictions_output/*_filtered.tsv 2>/dev/null || true)
+        filtered=$(ls {params.pred_dir}/*_filtered.tsv 2>/dev/null || true)
         if [ -z "$filtered" ]; then
             echo -e "clade_id\tID\tscore\tn_eligible_in_clade\tn_members_in_clade" \
                 > {output.tsv}
             echo "[INFO] No *_filtered.tsv found — wrote empty representatives TSV." \
                 > {log}
         else
-            python scripts/select_representatives.py \
+            python {params.script} \
                 --clades {input.clades} \
                 --hit_list {input.hit_list} \
                 --filtered $filtered \
@@ -366,54 +395,61 @@ rule select_representatives:
 
 rule tree_png:
     input:
-        "data/trees/nj_tree.nwk",
+        os.path.join(DATA_DIR, "trees/nj_tree.nwk"),
     output:
-        "data/trees/nj_tree.png",
+        os.path.join(DATA_DIR, "trees/nj_tree.png"),
     log:
-        "logs/tree_png.log",
+        os.path.join(LOG_DIR, "tree_png.log"),
+    params:
+        script=os.path.join(SCRIPTS_DIR, "render_tree_png.py"),
     shell:
         r"""
-        python scripts/render_tree_png.py {input} {output} --dpi 300 2> {log}
+        python {params.script} {input} {output} --dpi 300 2> {log}
         """
 
 rule merge_predictions:
      input:
-         hitlist="data/enzymm/hit_pdbs.txt",
-         netsolp="data/predictions/netsolp.tsv",
-         phoptnn="data/predictions/phoptnn.tsv",
-         seq2topt="data/predictions/seq2topt_topt.tsv",
-         seq2tm="data/predictions/seq2topt_tm.tsv",
+         hitlist=os.path.join(DATA_DIR, "enzymm/hit_pdbs.txt"),
+         netsolp=os.path.join(DATA_DIR, "predictions/netsolp.tsv"),
+         phoptnn=os.path.join(DATA_DIR, "predictions/phoptnn.tsv"),
+         seq2topt=os.path.join(DATA_DIR, "predictions/seq2topt_topt.tsv"),
+         seq2tm=os.path.join(DATA_DIR, "predictions/seq2topt_tm.tsv"),
      output:
-         sentinel="predictions_output/.done",
+         sentinel=os.path.join(PRED_DIR, ".done"),
      log:
-         "logs/merge_predictions.log",
+         os.path.join(LOG_DIR, "merge_predictions.log"),
+     params:
+         script=os.path.join(SCRIPTS_DIR, "merge_predictions.py"),
+         pred_dir=PRED_DIR,
      shell:
          r"""
-         python scripts/merge_predictions.py \
+         python {params.script} \
              --hit_list {input.hitlist} \
              --netsolp  {input.netsolp} \
              --phoptnn  {input.phoptnn} \
              --seq2topt {input.seq2topt} \
              --seq2tm   {input.seq2tm} \
-             --output_dir predictions_output \
+             --output_dir {params.pred_dir} \
              2> {log} && touch {output.sentinel}
          """
 
 rule filter_predictions:
     input:
-        sentinel="predictions_output/.done",
+        sentinel=os.path.join(PRED_DIR, ".done"),
     output:
-        sentinel="predictions_output/.filter_done",
+        sentinel=os.path.join(PRED_DIR, ".filter_done"),
     log:
-        "logs/filter_predictions.log",
+        os.path.join(LOG_DIR, "filter_predictions.log"),
     params:
+        script=os.path.join(SCRIPTS_DIR, "filter_predictions.py"),
+        pred_dir=PRED_DIR,
         spec_args=" ".join(
             f"--{flag} {val}" for flag, val in FILTER_SPECS.items()
         ),
     shell:
         r"""
-        python scripts/filter_predictions.py \
-            --output_dir predictions_output \
+        python {params.script} \
+            --output_dir {params.pred_dir} \
             {params.spec_args} \
             2> {log} \
         && touch {output.sentinel}

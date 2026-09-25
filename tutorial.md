@@ -143,9 +143,12 @@ EnzymeSifter/
  
 ```
 Usage: ./run_stage1.sh <input> [options]
+       ./run_stage1.sh -l <list_file> [options]
 ```
  
-`<input>` is **required** and can be either a single FASTA (`.fasta` / `.fa` / `.faa`) or a directory containing one or more such files. All filtering options are independent; supplying none of them runs Stage 1 as a passthrough that simply writes the input back out.
+`<input>` can be either a single FASTA (`.fasta` / `.fa` / `.faa`) or a directory containing one or more such files.
+Alternatively, use **`-l <list_file>`** with a text file containing paths of all FASTA files to process each FASTA into its own `<sample_name>/` folder.
+All filtering options are independent; supplying none of them runs Stage 1 as a passthrough that simply writes the input back out.
  
 ### `-residues <motif>`
  
@@ -208,9 +211,10 @@ The cheap filters run first so the expensive predictors only see sequences that 
  
 ```
 Usage: ./run_stage2.sh /path/to/pdbs [filter options] [clade options]
+       ./run_stage2.sh -l <list_file> [filter options] [clade options]
 ```
  
-`/path/to/pdbs` is **required** and must be a directory containing the `.pdb` files. The filename becomes the canonical `ID` downstream, so make sure filenames are descriptive and stable. Multi-chain PDBs are supported - Stage 2 will produce per-chain plus per-structure output tables automatically.
+`/path/to/pdbs` must be a directory containing the `.pdb` files. Alternatively, supply **`-l <list_file>`** with the list of FASTA files (or PDB directories); Stage 2 will run for each sample and output to its respective `<sample_name>/` directory. The filename becomes the canonical `ID` downstream, so make sure filenames are descriptive and stable. Multi-chain PDBs are supported - Stage 2 will produce per-chain plus per-structure output tables automatically.
  
 If you pass no other flags, Stage 2 still runs all four property predictors plus EnzyMM, the MUSCLE alignment, and the NJ tree - it just doesn't filter or pick representatives.
  
