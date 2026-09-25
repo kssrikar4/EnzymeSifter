@@ -80,7 +80,7 @@ EnzymeSifter creates and manages its own conda environments automatically. You d
 Clone the repository:
 
 ```bash
-git clone https://github.com/Dar-Omar/EnzymeSifter.git
+git clone https://github.com/kssrikar4/EnzymeSifter.git
 cd EnzymeSifter
 ```
 
@@ -102,10 +102,17 @@ On the first invocation of either stage, a single unified conda environment (`en
 ```
 ./run_stage1.sh path/to/fasta [options]
 ```
-#### Example
+#### Examples
 ```bash
+# Standard regex motif (e.g. trypsin active site)
 ./run_stage1.sh ~/protein.fasta -residues GDSGGP -pfam PF00089 -identity 90
+
+# PROSITE motif syntax (e.g. ATP/GTP-binding site motif A / P-loop)
+./run_stage1.sh ~/protein.fasta -residues "[AG]-x(4)-G-K-[ST]" -identity 90
 ```
+
+> **Note**: This fork supports both standard Python regular expressions (e.g., `.` for any residue, `G.S.G`) and **PROSITE motif syntax** (e.g. `-` separators, `x(n)` or `x(n,m)` wildcards, character classes `[AG]`, exclusion sets `{...}`, and `<` / `>` terminus anchors). Both formats are supported interchangeably.
+
 
 ### Between the stages - structure prediction
 
@@ -148,6 +155,7 @@ This version of EnzymeSifter has been heavily optimized for speed and throughput
 - **GPU Acceleration**: Neural network components including `CLEAN`, `pHoptNN`, `Seq2Topt`, and `NetSolP` have been updated to utilize CUDA-enabled PyTorch and ONNX Runtime if a compatible GPU is present. Mixed precision (`torch.autocast`) and batched feature extraction are used for maximum throughput.
 - **Batched Feature Extraction**: `Seq2Topt` now extracts ESM-2 embeddings once in memory and passes them through both Topt and Tm heads simultaneously, eliminating duplicate sequence processing.
 - **Hardware Concurrency**: Sub-processes (e.g. `mmseqs2`, `hmmsearch`, and `muscle`) are now automatically supplied with explicit thread directives matching your `--threads` arguments for full utilization of multicore CPUs.
+- **Flexible Motif Filtering (PROSITE & Regex)**: Stage 1 `-residues` filtering seamlessly accepts both standard regular expressions and full PROSITE-style motif syntax (e.g. `[AG]-x(4)-G-K-[ST]`, `x(2,4)`, `{CF}`, `<` / `>`), automatically detecting and converting PROSITE patterns.
 - **Fast Tree Building**: BioPython's pure-Python implementation of distance matrices and NJ-tree building has been replaced with `FastTree` for massive speedups on large alignments.
 
 ---

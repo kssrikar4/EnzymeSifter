@@ -43,11 +43,41 @@ def resolve_input(input_path):
     sys.exit(f"[ERROR] Input path is neither a file nor a directory: {p}")
 
 
+def prosite_to_regex(pattern: str) -> str:
+    """Convert a PROSITE-style pattern to a regular expression, preserving standard regexes."""
+    p = pattern.strip()
+    if p.startswith('<'):
+        p = '^' + p[1:]
+    if p.endswith('>'):
+        p = p[:-1] + '$'
+    p = re.sub(r'\{([A-Za-z]+)\}', r'[^\1]', p)
+    p = re.sub(r'[xX]\((\d+),(\d+)\)', r'.{\1,\2}', p)
+    p = re.sub(r'[xX]\((\d+)\)', r'.{\1}', p)
+
+    tokens = []
+    in_bracket = False
+    for char in p:
+        if char == '[':
+            in_bracket = True
+            tokens.append(char)
+        elif char == ']':
+            in_bracket = False
+            tokens.append(char)
+        elif char == '-' and not in_bracket:
+            continue
+        elif char in ('x', 'X') and not in_bracket:
+            tokens.append('.')
+        else:
+            tokens.append(char)
+    return ''.join(tokens)
+
+
 def compile_motif(motif_str):
+    regex_str = prosite_to_regex(motif_str)
     try:
-        return re.compile(motif_str, re.IGNORECASE)
+        return re.compile(regex_str, re.IGNORECASE)
     except re.error as e:
-        sys.exit(f"[ERROR] Invalid motif pattern {motif_str!r}: {e}")
+        sys.exit(f"[ERROR] Invalid motif pattern {motif_str!r} (compiled as {regex_str!r}): {e}")
 
 
 def filter_by_motif(input_fasta, output_fasta, motif_report, pattern, motif_str):
