@@ -165,10 +165,6 @@ For each FASTA file, a folder named after the file (e.g. `sample1/`, `sample2/`)
 ## License
 
 - **Source code**: MIT License (see `LICENSE`)
-- **Predicted structures** (`/pdbs/`): subject to the
-  [AlphaFold Server Output Terms of Use](https://alphafoldserver.com/output-terms).
-  See `/pdbs/TERMS.txt` for details. Non-commercial use only.
-  
 
 
 

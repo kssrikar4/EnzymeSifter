@@ -18,8 +18,8 @@ Arguments:
 Multi-FASTA mode:
   -l, --list <file>   Text file containing file paths of FASTA files (one per line).
                       Predicts structures for each FASTA file, saving PDBs under:
-                        <sample_name>/data/predicted_pdbs/ (default) or <output_dir>/<sample_name>/
-                      If <sample_name>/data/stage1/nonredundant.fasta exists, it is
+                        data/predicted_pdbs/<sample_name>/ (default) or <output_dir>/<sample_name>/
+                      If data/stage1/<sample_name>/nonredundant.fasta exists, it is
                       automatically used as the filtered input for prediction.
 USAGE
     exit 1
@@ -122,21 +122,23 @@ if [ -n "$LIST_FILE" ]; then
 
         # Locate appropriate input FASTA: prefer stage 1 nonredundant FASTA if available
         target_fasta=""
-        if [ -f "${sample_name}/data/stage1/nonredundant.fasta" ]; then
+        if [ -f "data/stage1/${sample_name}/nonredundant.fasta" ]; then
+            target_fasta="data/stage1/${sample_name}/nonredundant.fasta"
+        elif [ -f "${sample_name}/data/stage1/nonredundant.fasta" ]; then
             target_fasta="${sample_name}/data/stage1/nonredundant.fasta"
         elif [ -f "${sample_name}/nonredundant.fasta" ]; then
             target_fasta="${sample_name}/nonredundant.fasta"
         elif [ -f "$abs_fasta" ]; then
             target_fasta="$abs_fasta"
         else
-            echo "Error: Could not find input FASTA for sample '${sample_name}'. Checked ${sample_name}/data/stage1/nonredundant.fasta and $abs_fasta" >&2
+            echo "Error: Could not find input FASTA for sample '${sample_name}'. Checked data/stage1/${sample_name}/nonredundant.fasta and $abs_fasta" >&2
             exit 1
         fi
 
         if [ -n "$OUTPUT_DIR" ]; then
             sample_out="${OUTPUT_DIR}/${sample_name}"
         else
-            sample_out="${sample_name}/data/predicted_pdbs"
+            sample_out="data/predicted_pdbs/${sample_name}"
         fi
         mkdir -p "${sample_out}"
 
@@ -147,15 +149,6 @@ if [ -n "$LIST_FILE" ]; then
 
         conda run -n "${ENV_NAME}" --no-capture-output \
             python "${SCRIPT_DIR}/scripts/predict_structures.py" "${target_fasta}" "${sample_out}"
-
-        # Create convenience symlinks if using standard folder structure
-        if [ -z "$OUTPUT_DIR" ]; then
-            (
-                cd "${sample_name}"
-                ln -sfn "data/predicted_pdbs" "predicted_pdbs" 2>/dev/null || true
-                ln -sfn "data/predicted_pdbs" "pdbs" 2>/dev/null || true
-            )
-        fi
     done
 
     echo ""

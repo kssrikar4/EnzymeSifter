@@ -65,7 +65,7 @@ Outputs:
   data/stage1/motif_report.tsv         motif match results
   data/stage1/pfam_report.tsv          Pfam match results
   data/stage1/ec_report.tsv            EC prediction results
-  (In -l mode, outputs are placed under <sample_name>/data/stage1/ and symlinked to <sample_name>/)
+  (In -l mode, outputs are placed under data/stage1/<sample_name>/)
 EOF
     exit 1
 }
@@ -198,8 +198,8 @@ if [ -n "$LIST_FILE" ]; then
         echo "[INFO] [$((i+1))/${#files[@]}] Processing sample '${sample_name}': ${abs_fasta}"
         echo "================================================================================"
 
-        sample_out="${sample_name}/data/stage1"
-        sample_log="${sample_name}/logs/stage1"
+        sample_out="data/stage1/${sample_name}"
+        sample_log="logs/stage1/${sample_name}"
         mkdir -p "${sample_out}" "${sample_log}"
 
         SAMPLE_CONFIG="input_fasta=${abs_fasta} out_dir=${sample_out} log_dir=${sample_log}"
@@ -212,16 +212,6 @@ if [ -n "$LIST_FILE" ]; then
             snakemake --snakefile "${SCRIPT_DIR}/Snakefile_stage1" --config ${SAMPLE_CONFIG} \
                 -j "${THREADS}" \
                 --quiet rules progress
-
-        # Create convenience symlinks directly under ${sample_name}/
-        (
-            cd "${sample_name}"
-            ln -sf "data/stage1/nonredundant.fasta" "nonredundant.fasta" 2>/dev/null || true
-            ln -sf "data/stage1/clustering_report.tsv" "clustering_report.tsv" 2>/dev/null || true
-            ln -sf "data/stage1/motif_report.tsv" "motif_report.tsv" 2>/dev/null || true
-            ln -sf "data/stage1/pfam_report.tsv" "pfam_report.tsv" 2>/dev/null || true
-            ln -sf "data/stage1/ec_report.tsv" "ec_report.tsv" 2>/dev/null || true
-        )
     done
 
     echo ""
