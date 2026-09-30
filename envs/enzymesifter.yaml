@@ -34,7 +34,7 @@ dependencies:
       - pdb2pqr==3.6.2
       - onnxruntime-gpu
       - fair-esm==2.0.0
-      - transformers
+      - transformers<4.47
       - accelerate
       - enzymm
       - gdown
