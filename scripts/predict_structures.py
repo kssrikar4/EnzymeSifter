@@ -5,7 +5,7 @@ import os
 import torch
 from pathlib import Path
 from Bio import SeqIO
-from transformers import AutoTokenizer, EsmForProteinFolding, pipeline
+from transformers import EsmForProteinFolding
 
 def main():
     if len(sys.argv) < 3:
@@ -20,24 +20,18 @@ def main():
         sys.exit(0)
         
     print("[INFO] Loading ESMFold v1...", file=sys.stderr)
-    tokenizer = AutoTokenizer.from_pretrained("facebook/esmfold_v1")
     model = EsmForProteinFolding.from_pretrained("facebook/esmfold_v1", low_cpu_mem_usage=True)
     
     model.trunk.set_chunk_size(64)
     model.eval()
     
-    device_id = -1
     if torch.cuda.is_available():
         vram = torch.cuda.get_device_properties(0).total_memory
         if vram >= 14 * 1024**3:
-            device_id = 0
             model = model.cuda()
         elif vram >= 4 * 1024**3:
-            device_id = 0
             model = model.half().cuda()
             print("[INFO] Using FP16 to fit model in limited VRAM.", file=sys.stderr)
-    
-    fold_pipe = pipeline("protein-folding", model=model, tokenizer=tokenizer, device=device_id)
     
     for rec in records:
         seq = str(rec.seq)
@@ -52,15 +46,7 @@ def main():
         print(f"[INFO] Predicting {rec.id}...", file=sys.stderr)
         with torch.no_grad():
             try:
-                res = fold_pipe(seq)
-                if isinstance(res, list):
-                    pdb_str = res[0]
-                else:
-                    pdb_str = res
-                    
-                if isinstance(pdb_str, dict) and "pdb" in pdb_str:
-                    pdb_str = pdb_str["pdb"]
-                    
+                pdb_str = model.infer_pdb(seq)
                 with open(out_path, "w") as f:
                     f.write(pdb_str)
             except Exception as e:
