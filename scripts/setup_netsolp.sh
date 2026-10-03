@@ -28,12 +28,13 @@ for attempt in $(seq 0 "${MAX_RETRIES}"); do
     fi
     echo "[INFO] Downloading NetSolP-1.0 (~5.6 GB) from DTU ..."
 
-    if command -v wget &>/dev/null; then
-        wget --no-verbose --tries=3 --timeout=120 \
-             -O "${TARBALL}" "${URL}"
-    elif command -v curl &>/dev/null; then
+    if command -v curl &>/dev/null; then
         curl -L --retry 3 --connect-timeout 120 \
-             -o "${TARBALL}" "${URL}"
+             --resolve "services.healthtech.dtu.dk:443:130.225.74.201" \
+             -o "${TARBALL}" "${URL}" || true
+    elif command -v wget &>/dev/null; then
+        wget --no-verbose --tries=3 --timeout=120 \
+             -O "${TARBALL}" "${URL}" || true
     else
         echo "[ERROR] Neither wget nor curl found." >&2
         exit 1

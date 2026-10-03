@@ -218,10 +218,8 @@ if [ -n "$LIST_FILE" ]; then
 
         pdb_path="$(find_pdb_dir "$abs_entry" "$sample_name" || true)"
         if [ -z "$pdb_path" ]; then
-            echo "Error: No PDB directory containing .pdb files found for sample '${sample_name}'." >&2
-            echo "Checked: '${abs_entry}', 'data/predicted_pdbs/${sample_name}', '${sample_name}/data/predicted_pdbs', '${sample_name}/predicted_pdbs', '${sample_name}/pdbs', and '${sample_name}'." >&2
-            echo "Please ensure PDB prediction has been run." >&2
-            exit 1
+            echo "[WARN] No PDB directory containing .pdb files found for sample '${sample_name}'. Skipping." >&2
+            continue
         fi
 
         echo ""
